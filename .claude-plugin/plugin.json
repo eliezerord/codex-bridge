@@ -10,6 +10,7 @@
   "homepage": "https://github.com/eliezerord/codex-bridge",
   "repository": "https://github.com/eliezerord/codex-bridge",
   "license": "MIT",
+  "privacyPolicyUrl": "https://github.com/eliezerord/codex-bridge/blob/main/PRIVACY.md",
   "keywords": ["codex", "openai", "openrouter", "multi-model", "chat", "mod"],
   "types": "./types/index.d.ts",
   "userConfig": {
