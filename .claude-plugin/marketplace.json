@@ -1,0 +1,15 @@
+{
+  "name": "codex-bridge",
+  "description": "Codex Bridge: chat with OpenAI Codex CLI inside Claude Code.",
+  "owner": {
+    "name": "eliezerord",
+    "url": "https://github.com/eliezerord"
+  },
+  "plugins": [
+    {
+      "name": "codex-bridge",
+      "source": "./",
+      "description": "Chat with OpenAI Codex CLI inside Claude Code, with native tool rows, diffs and questions. Also asks OpenRouter models."
+    }
+  ]
+}

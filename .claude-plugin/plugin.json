@@ -1,0 +1,50 @@
+{
+  "name": "codex-bridge",
+  "displayName": "Codex Bridge",
+  "version": "0.2.0",
+  "description": "Chat with OpenAI Codex CLI inside Claude Code: Codex answers in the same conversation with native tool rows, diffs and questions, and you switch back to Claude anytime. Also asks OpenRouter models.",
+  "author": {
+    "name": "eliezerord",
+    "url": "https://github.com/eliezerord"
+  },
+  "homepage": "https://github.com/eliezerord/codex-bridge",
+  "repository": "https://github.com/eliezerord/codex-bridge",
+  "license": "MIT",
+  "keywords": ["codex", "openai", "openrouter", "multi-model", "chat", "mod"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "openrouterApiKey": {
+      "type": "string",
+      "title": "OpenRouter API key",
+      "description": "Used by /or, the openrouter_ask tool and Codex-over-OpenRouter. Leave blank to use the OPENROUTER_API_KEY environment variable.",
+      "sensitive": true,
+      "default": ""
+    },
+    "openrouterModel": {
+      "type": "string",
+      "title": "Default OpenRouter model",
+      "description": "Model id used when /or names none, e.g. openrouter/auto or anthropic/claude-sonnet-4.5.",
+      "default": "openrouter/auto"
+    },
+    "codexProvider": {
+      "type": "string",
+      "title": "Codex provider",
+      "description": "codex: Codex's own login and config. openrouter: run Codex against OpenRouter with the key above.",
+      "options": ["codex", "openrouter"],
+      "default": "codex"
+    },
+    "codexModel": {
+      "type": "string",
+      "title": "Codex model",
+      "description": "Model passed to codex -m. Blank uses ~/.codex/config.toml (or the OpenRouter default model when the provider is openrouter).",
+      "default": ""
+    },
+    "codexSandbox": {
+      "type": "string",
+      "title": "Codex sandbox for /codex",
+      "description": "What Codex may touch when you run /codex. The model's codex_run tool is read-only unless it asks otherwise.",
+      "options": ["read-only", "workspace-write"],
+      "default": "workspace-write"
+    }
+  }
+}
