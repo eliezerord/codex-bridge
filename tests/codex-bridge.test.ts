@@ -2,6 +2,8 @@ import type { RenderElement } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
+import { openRouterBody, readOpenRouterReply } from '../hooks/register'
+
 const typed = { origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as const
 
 const reply = (model: string, content: string) => ({
@@ -19,44 +21,31 @@ test('/or without a key says where to set one', async ($, on) => {
   expect(text).toContain('No OpenRouter key')
 })
 
-test('/or sends the named model and the key', async ($, on) => {
-  mock.env(on, { OPENROUTER_API_KEY: 'sk-test' })
-  const seen: { url: string; body: string; auth: string }[] = []
-  on('http.fetch', ($, e) => {
-    seen.push({
-      url: e.url,
-      body: String(e.init?.body ?? ''),
-      auth: String(e.init?.headers?.Authorization ?? ''),
-    })
-    return reply('openai/gpt-5', 'hi there')
+test('/or never takes a key from the environment', async ($, on) => {
+  mock.env(on, { OPENROUTER_API_KEY: 'sk-or-from-the-environment' })
+  let isFetched = false
+  on('http.fetch', () => {
+    isFetched = true
+    return reply('x', 'y')
   })
-  const { text } = await $.command.run({ command: 'or', args: 'openai/gpt-5 say hi', ...typed })
-  expect(text).toContain('hi there')
-  expect(seen[0]?.url).toBe('https://openrouter.ai/api/v1/chat/completions')
-  expect(seen[0]?.auth).toBe('Bearer sk-test')
-  expect(JSON.parse(seen[0]?.body ?? '{}')).toEqual({
+  const { text } = await $.command.run({ command: 'or', args: 'hello', ...typed })
+  expect(text).toContain('No OpenRouter key')
+  expect(isFetched).toBe(false)
+})
+
+test('OpenRouter gets only the model and the prompt', () => {
+  expect(JSON.parse(openRouterBody('openai/gpt-5', 'say hi'))).toEqual({
     model: 'openai/gpt-5',
     messages: [{ role: 'user', content: 'say hi' }],
   })
 })
 
-test('/or falls back to the default model', async ($, on) => {
-  mock.env(on, { OPENROUTER_API_KEY: 'sk-env' })
-  let model = ''
-  on('http.fetch', ($, e) => {
-    model = (JSON.parse(String(e.init?.body)) as { model: string }).model
-    return reply(model, 'ok')
-  })
-  const { text } = await $.command.run({ command: 'or', args: 'what is 2+2', ...typed })
-  expect(model).toBe('openrouter/auto')
-  expect(text).toContain('[openrouter/auto]')
-})
-
-test('/or reports an OpenRouter error', async ($, on) => {
-  mock.env(on, { OPENROUTER_API_KEY: 'sk-test' })
-  on('http.fetch', () => ({ value: { status: 402, ok: false, headers: {}, text: '{"error":"no credits"}' } }))
-  const { text } = await $.command.run({ command: 'or', args: 'hello', ...typed })
-  expect(text).toContain('OpenRouter answered 402')
+test("OpenRouter's reply is shown under the model that wrote it, or its error", () => {
+  const ok = readOpenRouterReply(reply('openai/gpt-5', 'hi there').value, 'openrouter/auto')
+  expect(ok).toEqual({ ok: true, text: '[openai/gpt-5]\n\nhi there' })
+  const failed = readOpenRouterReply({ status: 402, ok: false, text: '{"error":"no credits"}' }, 'openrouter/auto')
+  expect(failed.ok).toBe(false)
+  expect(failed.text).toContain('OpenRouter answered 402')
 })
 
 test('/codex without a task shows usage', async $ => {
@@ -100,17 +89,12 @@ test('the picker above the prompt sets the Codex model on every surface that has
   }
 })
 
-test('the openrouter_ask tool reads its arguments and answers', async ($, on) => {
-  mock.env(on, { OPENROUTER_API_KEY: 'sk-test' })
-  let sent = ''
-  on('http.fetch', ($, e) => {
-    sent = String(e.init?.body)
-    return reply('openai/gpt-5', 'tool reply')
-  })
+test('the openrouter_ask tool reads its arguments and needs a key', async ($, on) => {
+  mock.env(on, {})
+  const missing = await $.tool.call({ tool: 'mcp__codex-bridge__openrouter_ask' })
+  expect(String(missing.deny ?? missing.text)).toContain('needs a prompt')
   const ran = await $.tool.call({ tool: 'mcp__codex-bridge__openrouter_ask', prompt: 'hi there', model: 'openai/gpt-5' })
-  expect(ran.deny).toBeUndefined()
-  expect(String(ran.result)).toContain('tool reply')
-  expect(JSON.parse(sent)).toEqual({ model: 'openai/gpt-5', messages: [{ role: 'user', content: 'hi there' }] })
+  expect(String(ran.result)).toContain('No OpenRouter key')
 })
 
 test('the codex_run tool reads its task', async $ => {

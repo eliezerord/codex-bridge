@@ -1,7 +1,7 @@
 {
   "name": "codex-bridge",
   "displayName": "Codex Bridge",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Chat with OpenAI Codex CLI inside Claude Code: Codex answers in the same conversation with native tool rows, diffs and questions, and you switch back to Claude anytime. Also asks OpenRouter models.",
   "author": {
     "name": "eliezerord",
@@ -16,9 +16,8 @@
     "openrouterApiKey": {
       "type": "string",
       "title": "OpenRouter API key",
-      "description": "Used by /or, the openrouter_ask tool and Codex-over-OpenRouter. Leave blank to use the OPENROUTER_API_KEY environment variable.",
-      "sensitive": true,
-      "default": ""
+      "description": "Used by /or, the openrouter_ask tool and Codex over OpenRouter, and sent only to openrouter.ai. Leave empty if you don't use OpenRouter.",
+      "sensitive": true
     },
     "openrouterModel": {
       "type": "string",
@@ -29,8 +28,7 @@
     "codexProvider": {
       "type": "string",
       "title": "Codex provider",
-      "description": "codex: Codex's own login and config. openrouter: run Codex against OpenRouter with the key above.",
-      "options": ["codex", "openrouter"],
+      "description": "Type codex to use Codex's own login and config, or openrouter to run Codex against OpenRouter with the key above. Anything else counts as codex.",
       "default": "codex"
     },
     "codexModel": {
@@ -42,8 +40,7 @@
     "codexSandbox": {
       "type": "string",
       "title": "Codex sandbox for /codex",
-      "description": "What Codex may touch when you run /codex. The model's codex_run tool is read-only unless it asks otherwise.",
-      "options": ["read-only", "workspace-write"],
+      "description": "Type workspace-write to let Codex change files in the project folder (in Codex chat and /codex), or read-only to keep it from changing anything. Anything else counts as workspace-write. Claude's codex_run tool is read-only unless Claude asks otherwise.",
       "default": "workspace-write"
     }
   }

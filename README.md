@@ -79,17 +79,56 @@ Claude can do the same through the `openrouter_ask` tool. Setting **Codex provid
 | Codex model | blank | A fixed Codex model; blank follows your Codex config. |
 | Codex sandbox for /codex | `workspace-write` | What Codex may change in chat mode and `/codex`: the project folder, or nothing (`read-only`). |
 
-## What it runs, reads and sends
+Claude Code asks for these when you install from the `/plugin` menu or with `/plugin install` in a session. To change them later, including adding your OpenRouter key, run `/plugin configure codex-bridge@codex-bridge`. The key is only ever read from this setting.
 
-Codex Bridge only acts when you use one of its commands, switches or tools.
+## What it runs, reads, writes and sends
 
-- **Runs** the Codex CLI on your machine (`codex exec`, `codex exec resume`) in the session's folder, with the sandbox above. Codex may run commands and edit files there, as it would on its own. On Windows, `/codex-open` starts Codex in a new console window. To show diffs of files Codex edited, it runs `git diff -- <file>`.
-- **Sends to OpenAI, through Codex:** your Codex messages and, for the first message of a Codex conversation (and for `/codex` without `--fresh`), the recent text of the Claude conversation. Claude Code's hidden system notes are removed first.
-- **Sends to OpenRouter (`openrouter.ai`):** the prompt of `/or` or `openrouter_ask` (plus the conversation with `--ctx`), with your OpenRouter key. The key comes from the setting above, or, when that is blank, from the `OPENROUTER_API_KEY` environment variable.
-- **Reads locally:** Codex's model list and default model and effort (`models_cache.json`, `config.toml`) and its session files (for `/from-codex`), in `~/.codex` or `CODEX_HOME`. It never reads Codex's login file.
-- **Writes locally:** a temporary file with Codex's final answer for `/codex`, and a handoff note for `/codex-open`, both in your temp folder.
+Codex Bridge only acts when you use one of its commands, switches or tools, or while Codex chat is on. It collects no analytics.
 
-It collects no analytics and talks to no other service.
+### Programs it runs, and why
+
+The commands are built at the call from your settings and your messages (model, reasoning effort, sandbox, the Codex conversation's id), so they aren't fixed text; this is the complete list.
+
+| Program | Why | When |
+| --- | --- | --- |
+| `node <npm global folder>/@openai/codex/bin/codex.js exec …` (or `codex exec …` when that file isn't there; on Windows `cmd /c codex exec …`) | Runs the Codex CLI on your message, with `--json`, the sandbox setting, and `-m` / `-c model_reasoning_effort=…` when you picked a model or effort. Your message goes in on standard input. | Codex chat, `/codex`, `/codex-chat <message>`, `/codex-say`, Claude's `codex_run` tool |
+| The same, as `codex exec resume <conversation id> …` | Continues the same Codex conversation. | Every Codex chat message after the first |
+| `git diff --no-color -- <file>` | Shows the diff of a file Codex edited. Read-only. | When Codex reports an edited file |
+| `cmd /c start "Codex from Claude" codex "<prompt>"` (Windows only) | Opens interactive Codex in its own console window, pointed at the handoff note. | `/codex-open` |
+
+Codex itself may run commands and edit files in the session's folder, as it would if you ran it yourself, within the sandbox setting (`workspace-write` or `read-only`). Codex Bridge only shows what Codex reports. The code that tidies Codex's reported commands for display (`bareCommand`) never runs anything.
+
+### Hosts it contacts
+
+- **`https://openrouter.ai/api/v1/chat/completions`**, directly: the model name and the prompt of `/or` or `openrouter_ask` (plus the conversation with `--ctx`), with your OpenRouter key from the plugin's setting. Nothing else is sent there, and the key goes nowhere else.
+- **OpenAI, through the Codex CLI** (Codex Bridge doesn't call it itself): your Codex messages and, for the first message of a Codex conversation (and `/codex` without `--fresh`), the recent text of the Claude conversation, with Claude Code's hidden system notes removed. With **Codex provider** set to `openrouter`, Codex sends these to OpenRouter instead, with your OpenRouter key passed to Codex in its environment.
+
+### Files it reads
+
+- In Codex's folder (`CODEX_HOME`, or `~/.codex`): `models_cache.json` (the models and effort levels your account offers), `config.toml` (your default model and effort), and the files in `sessions/` (`/from-codex` reads the newest one's last answer). It never reads Codex's login file.
+- A file Codex created, to show it as a diff.
+
+### Files it writes
+
+Only temporary files in your temp folder; it never writes build, start-up, settings or instructions files.
+
+- `codex-bridge-<time>.md`: Codex's final answer for `/codex`, written by Codex (`-o`) and read back.
+- `claude-handoff-<time>.md`: the conversation so far, for `/codex-open` to hand to Codex.
+
+### Environment variables it reads
+
+`APPDATA`, `USERPROFILE`, `HOME`, `CODEX_HOME`, `OS`, `TEMP` and `TMPDIR`, only to find Codex, its folder and the temp folder. It reads no credentials from your environment.
+
+### What its hooks do
+
+| Hook | What it does |
+| --- | --- |
+| `session.start` | Registers the commands and tools below, and reads Codex's model list for the pickers. |
+| `command.run` | Answers its own commands (`/codex`, `/codex-chat`, `/claude`, `/codex-model`, `/codex-effort`, `/codex-new`, `/codex-say`, `/codex-open`, `/from-codex`, `/codex-pane`, `/or`). Other commands pass through untouched. |
+| `turn.start`, `turn.step` | While Codex chat is on, they answer the turn with Codex's reply instead of sending it to Claude: no Claude request is made for those turns. With chat mode off, every turn passes through untouched. |
+| `turn.complete` | Stops a running Codex process when its turn ends early (Esc). |
+| `tool.call` | Answers the plugin's own three tools: `codex_run` and `openrouter_ask`, which Claude can call, and `codex`, the internal tool whose rows show Codex's steps in chat mode (it answers with what Codex already did and refuses any call Codex didn't make). For `AskUserQuestion`, it passes the call on unchanged and only records your answer when the question came from Codex, to hand it to Codex. All other tool calls pass through untouched. |
+| `ui.render` | Draws the band above the prompt (Talk to, Codex model, Effort), the Codex output pane, and file diffs inside Codex's tool rows and replies. Everything else is drawn by Claude Code as usual. |
 
 ## How chat mode works
 

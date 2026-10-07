@@ -139,31 +139,21 @@ async function brief($: EngineInterface, maxChars = 8000): Promise<string> {
   return parts.join('\n\n')
 }
 
-async function openrouterKey($: EngineInterface, options: PluginOptions) {
-  const own = String(options.openrouterApiKey ?? '').trim()
-  return own || (await $.env.get('OPENROUTER_API_KEY'))?.trim() || ''
+/** The OpenRouter key the user gave this plugin (its sensitive setting); '' when none. */
+function openrouterKey(options: PluginOptions): string {
+  return String(options.openrouterApiKey ?? '').trim()
 }
 
 const NO_KEY =
-  'No OpenRouter key. Set the OPENROUTER_API_KEY environment variable (Windows: "Edit environment variables for your account"), then restart Claude.'
+  'No OpenRouter key. Add one with /plugin configure codex-bridge@codex-bridge (it is kept in secure storage).'
 
-async function askOpenRouter(
-  $: EngineInterface,
-  options: PluginOptions,
-  model: string,
-  prompt: string,
-): Promise<Answer> {
-  const key = await openrouterKey($, options)
-  if (!key) return { ok: false, text: NO_KEY }
-  const response = await $.http.fetch(`${OPENROUTER_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      'X-Title': 'Claude Code codex-bridge',
-    },
-    body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
-  })
+/** The chat-completions request body OpenRouter gets: the model and the one prompt, nothing else. */
+export function openRouterBody(model: string, prompt: string): string {
+  return JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] })
+}
+
+/** What OpenRouter's answer says, for the person: the reply under the model that wrote it, or why there is none. */
+export function readOpenRouterReply(response: { status: number; ok: boolean; text: string }, model: string): Answer {
   if (!response.ok) {
     return { ok: false, text: `OpenRouter answered ${response.status}: ${response.text.slice(0, 600)}` }
   }
@@ -177,6 +167,26 @@ async function askOpenRouter(
   } catch {
     return { ok: false, text: `OpenRouter sent something that is not JSON: ${response.text.slice(0, 300)}` }
   }
+}
+
+async function askOpenRouter(
+  $: EngineInterface,
+  options: PluginOptions,
+  model: string,
+  prompt: string,
+): Promise<Answer> {
+  const key = openrouterKey(options)
+  if (!key) return { ok: false, text: NO_KEY }
+  const response = await $.http.fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'X-Title': 'Claude Code codex-bridge',
+    },
+    body: openRouterBody(model, prompt),
+  })
+  return readOpenRouterReply(response, model)
 }
 
 /** How to start Codex: its npm entry through node, else the shim through cmd. */
@@ -209,7 +219,7 @@ async function codexSetup($: EngineInterface, options: PluginOptions, override =
   const env: Record<string, string> = {}
   const provider: string[] = []
   if (isOpenRouter) {
-    const key = await openrouterKey($, options)
+    const key = openrouterKey(options)
     if (!key) return { error: NO_KEY }
     env.OPENROUTER_API_KEY = key
     provider.push(
@@ -406,10 +416,13 @@ type CodexItem = {
   message?: string
 }
 
-/** A shell command as Codex ran it, its PowerShell or sh wrapper taken off. */
+/**
+ * The text of a command Codex reports, for display only: when Codex's report has
+ * the form `<program> <flags> '<command>'`, the quoted command alone.
+ */
 export function bareCommand(command: string): string {
-  const wrapped = /(?:powershell(?:\.exe)?"?|pwsh(?:\.exe)?"?|bash|sh)\s+(?:-NoProfile\s+)?(?:-Command|-lc|-c)\s+(['"])([\s\S]*)\1\s*$/i.exec(command)
-  return (wrapped?.[2] ?? command).trim()
+  const quoted = /^\s*(?:"[^"]+"|\S+)(?:\s+-\w+)+\s+(['"])([\s\S]*)\1\s*$/.exec(command)
+  return (quoted?.[2] ?? command).trim()
 }
 
 const oneLine = (text: string, max = 100) => {
